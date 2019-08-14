@@ -91,7 +91,7 @@ class Builder:
         if task is None:
             raise RuntimeError('Task not found: {}'.format(t))
 
-        # Requirements?
+        # Requirements? If so, recurse into them.
         reqtasks = []
         req_dates = []
         newest_req_t = 0  # Beginning of times.
@@ -102,13 +102,16 @@ class Builder:
                     self.run_(reqtask)  # Run requirement task
                     reqtasks.append(reqtask)
 
-            # Newest requirement
+            # Newest (in time) requirement
             try:
                 req_dates = []
                 for req in task['reqs']:
                     rtask = self.get_task_by_output(req)
+
                     # This requirement is not to be ignored?
-                    if ('flags' not in rtask) or ('flags' not in task) or \
+                    if (not rtask) or \
+                            ('flags' not in rtask) or \
+                            ('flags' not in task) or \
                             not (Builder.IGNOREPRESENT & task['flags']):
                         req_dates.append(os.path.getmtime(req))
                 newest_req_t = max(req_dates)
