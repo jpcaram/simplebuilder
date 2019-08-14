@@ -26,7 +26,10 @@ class Builder:
     def __init__(self):
 
         self.logger = logging.getLogger('Builder')
+        self.logger.propagate = False
         self.logger.setLevel(logging.ERROR)
+        for h in self.logger.handlers:
+            self.logger.removeHandler(h)
         h = logging.StreamHandler(sys.stdout)
         h.setFormatter(logging.Formatter('%(name)s - %(levelname)s - %(message)s'))
         self.logger.addHandler(h)
