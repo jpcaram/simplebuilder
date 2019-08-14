@@ -1,6 +1,8 @@
 from unittest import TestCase
 from simplebuilder import Builder
 import os
+from time import sleep
+from pathlib import Path
 
 
 class MyBuilder(Builder):
@@ -100,6 +102,37 @@ class TestBuilder(TestCase):
             pass
 
         self.assertTrue(builder.run('afile'))
+
+        sleep(1)
+        Path(builder.tasks[0]['outputs'][0]).touch()
+
+        # The folder is now newer, so 'afile' must be rebuilt.
+        self.assertTrue(builder.run('afile'))
+
+        os.remove(builder.tasks[1]['outputs'][0])
+        os.rmdir(builder.tasks[0]['outputs'][0])
+
+    def test_flagdeps3(self):
+
+        builder = MyBuilder2()
+        builder.get_task_by_name('afile')['flags'] = Builder.IGNOREPRESENT
+
+        try:
+            os.remove(builder.tasks[1]['outputs'][0])
+        except FileNotFoundError:
+            pass
+
+        try:
+            os.rmdir(builder.tasks[0]['outputs'][0])
+        except FileNotFoundError:
+            pass
+
+        self.assertTrue(builder.run('afile'))
+
+        sleep(1)
+        Path(builder.tasks[0]['outputs'][0]).touch()
+
+        # The folder is now newer, but we have the IGNOREPRESENT flag set.
         self.assertFalse(builder.run('afile'))
 
         os.remove(builder.tasks[1]['outputs'][0])

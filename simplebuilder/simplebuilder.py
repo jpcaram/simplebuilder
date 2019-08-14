@@ -20,6 +20,9 @@ class Builder:
     """Targets must be older than requiring tasks targets for a task to
     be considered up to date."""
 
+    IGNOREPRESENT = 8
+    """If a requirement has the PRESENT flag, ignore its date."""
+
     def __init__(self):
 
         self.logger = logging.getLogger('Builder')
@@ -90,6 +93,8 @@ class Builder:
 
         # Requirements?
         reqtasks = []
+        req_dates = []
+        newest_req_t = 0  # Beginning of times.
         if 'reqs' in task:
             for req in task['reqs']:
                 reqtask = self.get_task_by_output(req)
@@ -97,8 +102,24 @@ class Builder:
                     self.run_(reqtask)  # Run requirement task
                     reqtasks.append(reqtask)
 
-        # This task does not have requirements
-        if 'reqs' not in task:
+            # Newest requirement
+            try:
+                req_dates = []
+                for req in task['reqs']:
+                    rtask = self.get_task_by_output(req)
+                    # This requirement is not to be ignored?
+                    if ('flags' not in rtask) or ('flags' not in task) or \
+                            not (Builder.IGNOREPRESENT & task['flags']):
+                        req_dates.append(os.path.getmtime(req))
+                newest_req_t = max(req_dates)
+            except FileNotFoundError as e:
+                raise CannotBuildError(str(e))
+            except ValueError as e:
+                pass  # req_dates is empty.
+
+        # This task does not have requirements, or all requirements
+        # are ignored in the date comparison.
+        if 'reqs' not in task or len(req_dates) == 0:
             # TODO: Must define how to handle. Force make for now.
             if 'action' in task:
                 if ('flags' not in task) or (Builder.ALWAYS & task['flags']):
@@ -108,6 +129,7 @@ class Builder:
                     try:
                         [os.path.getmtime(o) for o in task['outputs']]
                     except FileNotFoundError:
+                        self.logger.info(task['name'] + ' is NOT up to date. Running.')
                         task['action'](task)
                         return True
                     self.logger.info(task['name'] + ' is up to date.')
@@ -115,20 +137,13 @@ class Builder:
             else:
                 raise CannotBuildError("No action to build target")
 
-        # Have requirements:
-        # Newest requirement
-        try:
-            newest_req_t = max([os.path.getmtime(o) for o in task['reqs']])
-        except FileNotFoundError as e:
-            raise CannotBuildError(str(e))
-            # return
-
         # Oldest output
         try:
             oldest_output_t = min([os.path.getmtime(o) for o in task['outputs']])
         except FileNotFoundError as e:
             # Missing output, must run
             if 'action' in task:
+                self.logger.info(task['name'] + ' is NOT up to date. Running.')
                 task['action'](task)
                 return True
             else:
@@ -138,6 +153,7 @@ class Builder:
         if newest_req_t > oldest_output_t:
             # Requirement is newer, run actions
             if 'action' in task:
+                self.logger.info(task['name'] + ' is NOT up to date. Running.')
                 task['action'](task)
                 return True
             else:
